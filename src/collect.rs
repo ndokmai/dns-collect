@@ -65,7 +65,7 @@ pub fn collect(
                     stat.ttls.insert(ttl);
                 });
         } else {
-            break;
+            let _ = writeln!(&mut error_log, "{:?}", response);
         }
     }
     eprintln!(
