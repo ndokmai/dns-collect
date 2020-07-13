@@ -38,11 +38,15 @@ pub fn collect(
     all_domains_counts: &mut AllDomains,
 ) {
     let mut error_log = File::create(ERROR_LOG_NAME).unwrap();
+    let mut repeat_count = 0usize;
+    let mut repeat_valid = 0usize;
     let mut response_count = 0usize;
     let mut response_valid = 0usize;
     for _ in 0..repeat {
+        repeat_count += 1;
         let response = query(&name_server.host, domain_names, record_type);
         if let Ok(response) = response {
+            repeat_valid += 1;
             response_count += response.len();
             response
                 .into_iter()
@@ -69,11 +73,13 @@ pub fn collect(
         }
     }
     eprintln!(
-        "{}:\t\tresults = #queries {}, #reponses {}, #valid {}",
+        "{}:\t\tresults = #queries {}, #reponses(valid/all) {}/{}, #repeat(valid/all) {}/{}",
         &name_server.name,
         domain_names.len() * repeat,
+        response_valid,
         response_count,
-        response_valid
+        repeat_valid,
+        repeat_count,
     );
 }
 
