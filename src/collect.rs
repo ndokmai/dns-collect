@@ -1,4 +1,5 @@
 use crate::error::*;
+use crate::name_server::NameServer;
 use crate::record_wrapper::RecordWrapper;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -25,21 +26,25 @@ impl std::fmt::Debug for DomainStat {
 }
 
 pub fn collect(
-    name_server: &str,
+    name_server: &NameServer,
     domain_names: &[String],
     record_type: RecordType,
     repeat: usize,
     all_domains_counts: &mut AllDomains,
 ) {
+    let mut response_count = 0usize;
+    let mut response_valid = 0usize;
     for _ in 0..repeat {
-        let response = query(name_server, domain_names, record_type);
+        let response = query(&name_server.host, domain_names, record_type);
         if let Ok(response) = response {
+            response_count += response.len();
             response
                 .into_iter()
                 .filter(|v| v.is_ok())
                 .map(|v| v.unwrap())
                 .filter(|v| v.record_type().is_ip_addr())
                 .for_each(|v| {
+                    response_valid += 1;
                     let name = v.name().clone();
                     let ttl = v.ttl();
                     let record_counts = all_domains_counts
@@ -55,6 +60,13 @@ pub fn collect(
             break;
         }
     }
+    eprintln!(
+        "{}:\t\tresults = #queries {}, #reponses {}, #valid {}",
+        &name_server.name,
+        domain_names.len() * repeat,
+        response_count,
+        response_valid
+    );
 }
 
 pub fn query(
