@@ -122,7 +122,20 @@ fn main() {
                                 batch_counter + i,
                                 n_batches
                             );
-                            collect(&name_server, batch, record_type, REPEAT, &mut all_domains);
+                            let meta = collect(&name_server, batch, record_type, REPEAT, &mut all_domains);
+                            eprintln!(
+                                "{}: batch result = #queries {}, #reponses(valid/all) {}/{}, #repeat(valid/all) {}/{}, #in_queries {}/{}, #not_in_queries {}/{}",
+                                name_server.name,
+                                domain_names.len() * REPEAT,
+                                meta.response_valid,
+                                meta.response_count,
+                                meta.repeat_valid,
+                                meta.repeat_count,
+                                meta.in_queries,
+                                meta.response_valid,
+                                meta.not_in_queries,
+                                meta.response_valid,
+                                );
                         });
                     let filename = format!(
                         "{}-{}.txt",
