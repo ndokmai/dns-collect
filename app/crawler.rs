@@ -126,7 +126,7 @@ fn main() {
                             eprintln!(
                                 "{}: batch result = #queries {}, #reponses(valid/all) {}/{}, #repeat(valid/all) {}/{}, #in_queries {}/{}, #not_in_queries {}/{}",
                                 name_server.name,
-                                domain_names.len() * REPEAT,
+                                BATCH * REPEAT,
                                 meta.response_valid,
                                 meta.response_count,
                                 meta.repeat_valid,
