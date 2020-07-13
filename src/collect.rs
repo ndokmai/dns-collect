@@ -3,7 +3,7 @@ use crate::name_server::NameServer;
 use crate::record_wrapper::RecordWrapper;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::net::IpAddr;
 use std::process::Command;
@@ -57,7 +57,7 @@ pub fn collect(
             v
         })
         .collect::<HashSet<Name>>();
-    let mut error_log = File::create(ERROR_LOG_NAME).unwrap();
+    let mut error_log = OpenOptions::new().append(true).open(ERROR_LOG_NAME);
     let mut meta = CollectMetadata::default();
     for _ in 0..repeat {
         meta.repeat_count += 1;
@@ -69,7 +69,14 @@ pub fn collect(
                 .into_iter()
                 .filter(|v| {
                     if v.is_err() {
-                        let _ = writeln!(&mut error_log, "{:?}", v);
+                        if let Ok(error_log) = error_log.as_mut() {
+                            let _ = writeln!(
+                                error_log,
+                                "{}: {:?}",
+                                chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                                v
+                            );
+                        }
                     }
                     v.is_ok()
                 })
@@ -90,8 +97,13 @@ pub fn collect(
                     stat.counts += 1;
                     stat.ttls.insert(ttl);
                 });
-        } else {
-            let _ = writeln!(&mut error_log, "{:?}", response);
+        } else if let Ok(error_log) = error_log.as_mut() {
+            let _ = writeln!(
+                error_log,
+                "{}: {:?}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                response
+            );
         }
     }
     meta
