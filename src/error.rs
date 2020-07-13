@@ -1,7 +1,10 @@
 #[derive(Debug)]
 pub enum RDataParseError {
-    UnsupportedType(trust_dns_proto::rr::RecordType),
     InvalidIpAddr(std::net::AddrParseError),
+    InvalidName(
+        trust_dns_proto::rr::RecordType,
+        trust_dns_proto::error::ProtoError,
+    ),
 }
 
 #[derive(Debug)]

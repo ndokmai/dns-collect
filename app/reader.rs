@@ -1,5 +1,5 @@
 use dns_collect::collect::AllDomains;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs::{read_dir, File};
 use std::path::Path;
 
@@ -46,6 +46,7 @@ pub fn main() {
     }
 
     for (ns, v) in all_ns.iter() {
+        //println!("{:#?}", v);
         println!("{} count: {}", ns, v.len());
     }
     let all_keys = all_ns

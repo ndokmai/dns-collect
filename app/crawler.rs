@@ -4,7 +4,7 @@ use dns_collect::name_server::{parse_name_servers_json, NameServer};
 use std::fs::{create_dir, File};
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 use trust_dns_proto::rr::RecordType;
 
 const REPEAT: usize = 10;
@@ -22,7 +22,7 @@ fn print_info(name_servers: &[NameServer], k: usize) {
     eprintln!();
     eprintln!("all name servers:");
     for n in name_servers {
-        eprintln!("\t{}:\t\t{}", n.name, n.host);
+        eprintln!("\t{}: {}", n.name, n.host);
     }
     eprintln!("crawl top k:\t\t\t{}", k);
     eprintln!("#repeats per domain:\t\t{}", REPEAT);
@@ -42,7 +42,7 @@ fn print_done(time: Duration) {
     eprintln!();
     eprintln!("############## done! ##############");
     eprintln!();
-    eprintln!("time spent: {} minutes", (time.as_secs()+60-1)/60);
+    eprintln!("time spent: {} minutes", (time.as_secs() + 60 - 1) / 60);
     eprintln!();
     eprintln!("#################### ##############");
 }
@@ -109,7 +109,7 @@ fn main() {
             .map(|name_server| {
                 let domain_names = domain_names.clone();
                 let target_dir = target_dir.clone();
-                let handle = thread::spawn(move || {
+                thread::spawn(move || {
                     let mut all_domains = AllDomains::new();
                     domain_names
                         .as_slice()
@@ -131,10 +131,13 @@ fn main() {
                     );
                     let file_path = target_dir.join(&name_server.name).join(&filename);
                     let mut file = File::create(&file_path).unwrap();
-                    eprintln!("{}: saving {} ...", name_server.name, file_path.to_str().unwrap());
+                    eprintln!(
+                        "{}: saving {} ...",
+                        name_server.name,
+                        file_path.to_str().unwrap()
+                    );
                     bincode::serialize_into(&mut file, &all_domains).unwrap();
-                });
-                handle
+                })
             })
             .collect::<Vec<_>>();
         handles.into_iter().for_each(|h| h.join().unwrap());
@@ -142,5 +145,4 @@ fn main() {
         accumulated += domain_names.len();
     }
     print_done(now.elapsed());
-
 }

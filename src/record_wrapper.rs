@@ -1,7 +1,7 @@
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use trust_dns_proto::rr::Record;
-use trust_dns_proto::serialize::binary::{BinDecodable, BinEncodable};
+use trust_dns_proto::serialize::binary::{BinDecodable, BinEncodable, BinEncoder};
 
 #[derive(Clone, Eq)]
 pub struct RecordWrapper(Record);
@@ -25,11 +25,10 @@ impl std::hash::Hash for RecordWrapper {
         self.0.record_type().hash(hasher);
         self.0.dns_class().hash(hasher);
         // skip TTL
-        self.0
-            .rdata()
-            .to_ip_addr()
-            .expect("Not an IP address")
-            .hash(hasher);
+        let mut buf = Vec::new();
+        let mut encoder = BinEncoder::new(&mut buf);
+        self.0.rdata().emit(&mut encoder).unwrap();
+        buf.hash(hasher);
     }
 }
 
@@ -53,13 +52,7 @@ impl std::fmt::Debug for RecordWrapper {
         formatter.write_str("\t")?;
         self.0.ttl().fmt(formatter)?;
         formatter.write_str("\t")?;
-        //self.0.rdata().as_a().unwrap().fmt(formatter)?;
-        self.0
-            .rdata()
-            .to_ip_addr()
-            .expect("Not an IP address")
-            .to_string()
-            .fmt(formatter)?;
+        format!("{:?}", self.0.rdata()).fmt(formatter)?;
         Ok(())
     }
 }
@@ -74,10 +67,10 @@ impl Serialize for RecordWrapper {
     }
 }
 
-struct Bytes;
+struct RecordVisitor;
 
-impl<'de> Visitor<'de> for Bytes {
-    type Value = Vec<u8>;
+impl<'de> Visitor<'de> for RecordVisitor {
+    type Value = RecordWrapper;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(formatter, "Invalid format")
@@ -87,7 +80,8 @@ impl<'de> Visitor<'de> for Bytes {
     where
         E: serde::de::Error,
     {
-        Ok(v.to_owned())
+        let inner = Record::from_bytes(v).unwrap();
+        Ok(RecordWrapper::new(inner))
     }
 }
 
@@ -96,8 +90,6 @@ impl<'de> Deserialize<'de> for RecordWrapper {
     where
         D: Deserializer<'de>,
     {
-        let buf = d.deserialize_bytes(Bytes)?;
-        let inner = Record::from_bytes(buf.as_slice()).unwrap();
-        Ok(Self::new(inner))
+        d.deserialize_bytes(RecordVisitor)
     }
 }

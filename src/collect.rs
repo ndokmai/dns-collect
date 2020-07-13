@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::process::Command;
 use std::str::FromStr;
+use trust_dns_proto::rr::rdata::NULL;
 use trust_dns_proto::rr::{Name, RData, Record, RecordType};
 
 pub type AllDomains = HashMap<Name, HashMap<RecordWrapper, DomainStat>>;
@@ -47,9 +48,7 @@ pub fn collect(
                     response_valid += 1;
                     let name = v.name().clone();
                     let ttl = v.ttl();
-                    let record_counts = all_domains_counts
-                        .entry(name.clone())
-                        .or_insert_with(HashMap::new);
+                    let record_counts = all_domains_counts.entry(name).or_insert_with(HashMap::new);
                     let stat = record_counts
                         .entry(RecordWrapper::new(v))
                         .or_insert_with(DomainStat::default);
@@ -76,7 +75,7 @@ pub fn query(
 ) -> Result<Vec<Result<Record, RecordParseError>>, QueryError> {
     let domain_names_result = domain_names
         .iter()
-        .map(|name| Name::from_str_relaxed(name).map_err(|e| QueryError::TrustDnsProtoError(e)))
+        .map(|name| Name::from_str_relaxed(name).map_err(QueryError::TrustDnsProtoError))
         .collect::<Vec<_>>();
     let mut domain_names = Vec::new();
     for name in domain_names_result.into_iter() {
@@ -89,8 +88,8 @@ pub fn query(
         .args(domain_names.as_slice())
         .arg(format!("{}", record_type))
         .output()
-        .map_err(|e| QueryError::CommandError(e))?;
-    let result = String::from_utf8(output.stdout).map_err(|e| QueryError::StringConvertError(e))?;
+        .map_err(QueryError::CommandError)?;
+    let result = String::from_utf8(output.stdout).map_err(QueryError::StringConvertError)?;
     let records_result = result
         .lines()
         .map(|l| {
@@ -99,13 +98,14 @@ pub fn query(
                 Err(RecordParseError::NotEnoughArguments)
             } else {
                 let domain_name = Name::from_str_relaxed(&line[0])
-                    .map_err(|e| RecordParseError::InvalidDomainName(e))?;
+                    .map_err(RecordParseError::InvalidDomainName)?;
                 let ttl = line[1]
                     .parse::<u32>()
-                    .map_err(|e| RecordParseError::InvalidTtl(e))?;
+                    .map_err(RecordParseError::InvalidTtl)?;
                 let record_type: RecordType =
-                    FromStr::from_str(&line[3]).map_err(|e| RecordParseError::InvalidRecord(e))?;
-                let rdata = parse_record_data(&line[4], record_type)?;
+                    FromStr::from_str(&line[3]).map_err(RecordParseError::InvalidRecord)?;
+                let rdata = parse_record_data(&line[4], record_type)
+                    .map_err(RecordParseError::InvalidRData)?;
                 let record = Record::from_rdata(domain_name, ttl, rdata);
                 Ok(record)
             }
@@ -114,18 +114,41 @@ pub fn query(
     Ok(records_result)
 }
 
-pub fn parse_record_data(rdata: &str, record_type: RecordType) -> Result<RData, RecordParseError> {
+pub fn parse_record_data(rdata: &str, record_type: RecordType) -> Result<RData, RDataParseError> {
     match record_type {
         RecordType::A | RecordType::AAAA => {
-            let ip_addr = IpAddr::from_str(rdata)
-                .map_err(|e| RecordParseError::InvalidRData(RDataParseError::InvalidIpAddr(e)))?;
+            let ip_addr = IpAddr::from_str(rdata).map_err(RDataParseError::InvalidIpAddr)?;
             Ok(match ip_addr {
                 IpAddr::V4(ip) => RData::A(ip),
                 IpAddr::V6(ip) => RData::AAAA(ip),
             })
         }
-        t => Err(RecordParseError::InvalidRData(
-            RDataParseError::UnsupportedType(t),
+        RecordType::ANAME => Ok(RData::ANAME(
+            Name::from_str_relaxed(rdata)
+                .map_err(|e| RDataParseError::InvalidName(record_type, e))?,
         )),
+        RecordType::CNAME => Ok(RData::CNAME(
+            Name::from_str_relaxed(rdata)
+                .map_err(|e| RDataParseError::InvalidName(record_type, e))?,
+        )),
+        RecordType::NS => {
+            Ok(RData::NS(Name::from_str_relaxed(rdata).map_err(|e| {
+                RDataParseError::InvalidName(record_type, e)
+            })?))
+        }
+        RecordType::PTR => {
+            Ok(RData::PTR(Name::from_str_relaxed(rdata).map_err(|e| {
+                RDataParseError::InvalidName(record_type, e)
+            })?))
+        }
+        RecordType::NULL => Ok(RData::NULL(NULL::with(rdata.as_bytes().to_owned()))),
+        RecordType::Unknown(code) => Ok(RData::Unknown {
+            code,
+            rdata: NULL::with(rdata.as_bytes().to_owned()),
+        }),
+        _ => Ok(RData::Unknown {
+            code: record_type.into(),
+            rdata: NULL::with(rdata.as_bytes().to_owned()),
+        }),
     }
 }
