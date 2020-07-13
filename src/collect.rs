@@ -3,11 +3,15 @@ use crate::name_server::NameServer;
 use crate::record_wrapper::RecordWrapper;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::Write;
 use std::net::IpAddr;
 use std::process::Command;
 use std::str::FromStr;
 use trust_dns_proto::rr::rdata::NULL;
 use trust_dns_proto::rr::{Name, RData, Record, RecordType};
+
+const ERROR_LOG_NAME: &str = "error_log.txt";
 
 pub type AllDomains = HashMap<Name, HashMap<RecordWrapper, DomainStat>>;
 
@@ -33,6 +37,7 @@ pub fn collect(
     repeat: usize,
     all_domains_counts: &mut AllDomains,
 ) {
+    let mut error_log = File::create(ERROR_LOG_NAME).unwrap();
     let mut response_count = 0usize;
     let mut response_valid = 0usize;
     for _ in 0..repeat {
@@ -41,9 +46,13 @@ pub fn collect(
             response_count += response.len();
             response
                 .into_iter()
-                .filter(|v| v.is_ok())
+                .filter(|v| {
+                    if v.is_err() {
+                        let _ = writeln!(&mut error_log, "{:?}", v);
+                    }
+                    v.is_ok()
+                })
                 .map(|v| v.unwrap())
-                .filter(|v| v.record_type().is_ip_addr())
                 .for_each(|v| {
                     response_valid += 1;
                     let name = v.name().clone();
