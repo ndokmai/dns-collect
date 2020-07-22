@@ -79,8 +79,10 @@ fn main() {
         _ => panic!("Invalid record type {}", args[1]),
     };
     let name_servers = parse_name_servers_json(Path::new(&args[2]));
-    let top_websites_reader =
-        csv::Reader::from_path(&args[3]).expect("Top websites file not found");
+    let top_domains_reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_path(&args[3])
+        .expect("Top websites file not found");
     let k = args[4].parse::<usize>().unwrap();
     let target_dir = PathBuf::from(args[5].clone());
     assert!(target_dir.exists());
@@ -92,7 +94,7 @@ fn main() {
 
     print_info(name_servers.as_slice(), k);
 
-    let mut record_iter = top_websites_reader.into_records().take(k).peekable();
+    let mut record_iter = top_domains_reader.into_records().take(k).peekable();
     let mut batch_counter = 1usize;
     let mut accumulated = 0usize;
 
